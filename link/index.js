@@ -1,11 +1,11 @@
 const googleDriveCtrl = async (ctx) => {
-  const id = ctx.query.id
+  const id = ctx.params.id
   const host = 'https://drive.google.com/'
   const newHeaders = {
     'user-agent':ctx.req.headers.get('user-agent')
   }
   let result = { id }
-  if( ctx.params.output == 'json' ){
+  if( ctx.query.output == 'json' ){
     let resp = await request.get(`${host}file/d/${id}/view`)
     result.name = (resp.body.match(/<meta\s+property="og:title"\s+content="([^"]+)"/) || ['',''])[1]
     result.ext = (result.name.match(/\.([0-9a-z]+)$/) || ['',''])[1]
@@ -29,6 +29,56 @@ const googleDriveCtrl = async (ctx) => {
     }
   }
   result.url = downloadUrl.replace('?e=download','')
+  return result
+}
+
+const lanzouCtrl = async (ctx) => {
+  const id = ctx.params.id
+  const host = 'https://www.lanzous.com'
+  const newHeaders = {
+    'user-agent':'Mozilla/5.0 (Linux; Android 6.0; 1503-M02 Build/MRA58K) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/37.0.0.0 Mobile MQQBrowser/6.2 TBS/036558 Safari/537.36 MicroMessenger/6.3.25.861 NetType/WIFI Language/zh_CN'
+  }
+  let result = { id }
+  let { body }  = await request.get(`${host}/tp/${id}` , {headers:{...newHeaders}})
+  let url = (body.match(/(?<=dpost\s*\+\s*["']\?)[^"']+/) || [false])[0]
+  let base = (body.match(/(?<=urlp[^\=]*=\s*')[^']+/)|| [false])[0]
+  result.name = (body.match(/(?<="md">)[^<]+/) || [''])[0].replace(/\s*$/,'')
+  result.ext = (result.name.match(/\.([0-9a-z]+)$/) || ['',''])[1]
+  if(url && base) result.url = base + url
+  return result
+}
+
+const joyCtrl = async (ctx) => {
+  const id = ctx.params.id
+  const host = atob('aHR0cDovL3d3dy45MXBvcm4uY29t')
+  const rnd = (min , max) => Math.floor(min+Math.random()*(max-min))
+  const ip = rnd(50,250) + "." + rnd(50,250) + "." + rnd(50,250)+ "." + rnd(50,250)
+  const newHeaders = {
+    'PHPSESSID':'cf',
+    'CLIENT-IP':ip,
+    'HTTP_X_FORWARDED_FOR':ip,
+    'user-agent':ctx.req.headers.get('user-agent')
+  }
+
+  const decodeUrl = async (body) => {
+    // eval / new Function is not allowed for security reasons. 
+    // let scrs = await request.get(`${host}/js/md5.js`)
+    ;var encode_version = 'sojson.v5', lbbpm = '__0x33ad7',  __0x33ad7=['QMOTw6XDtVE=','w5XDgsORw5LCuQ==','wojDrWTChFU=','dkdJACw=','w6zDpXDDvsKVwqA=','ZifCsh85fsKaXsOOWg==','RcOvw47DghzDuA==','w7siYTLCnw=='];(function(_0x94dee0,_0x4a3b74){var _0x588ae7=function(_0x32b32e){while(--_0x32b32e){_0x94dee0['push'](_0x94dee0['shift']());}};_0x588ae7(++_0x4a3b74);}(__0x33ad7,0x8f));var _0x5b60=function(_0x4d4456,_0x5a24e3){_0x4d4456=_0x4d4456-0x0;var _0xa82079=__0x33ad7[_0x4d4456];if(_0x5b60['initialized']===undefined){(function(){var _0xef6e0=typeof window!=='undefined'?window:typeof process==='object'&&typeof require==='function'&&typeof global==='object'?global:this;var _0x221728='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';_0xef6e0['atob']||(_0xef6e0['atob']=function(_0x4bb81e){var _0x1c1b59=String(_0x4bb81e)['replace'](/=+$/,'');for(var _0x5e3437=0x0,_0x2da204,_0x1f23f4,_0x3f19c1=0x0,_0x3fb8a7='';_0x1f23f4=_0x1c1b59['charAt'](_0x3f19c1++);~_0x1f23f4&&(_0x2da204=_0x5e3437%0x4?_0x2da204*0x40+_0x1f23f4:_0x1f23f4,_0x5e3437++%0x4)?_0x3fb8a7+=String['fromCharCode'](0xff&_0x2da204>>(-0x2*_0x5e3437&0x6)):0x0){_0x1f23f4=_0x221728['indexOf'](_0x1f23f4);}return _0x3fb8a7;});}());var _0x43712e=function(_0x2e9442,_0x305a3a){var _0x3702d8=[],_0x234ad1=0x0,_0xd45a92,_0x5a1bee='',_0x4a894e='';_0x2e9442=atob(_0x2e9442);for(var _0x67ab0e=0x0,_0x1753b1=_0x2e9442['length'];_0x67ab0e<_0x1753b1;_0x67ab0e++){_0x4a894e+='%'+('00'+_0x2e9442['charCodeAt'](_0x67ab0e)['toString'](0x10))['slice'](-0x2);}_0x2e9442=decodeURIComponent(_0x4a894e);for(var _0x246dd5=0x0;_0x246dd5<0x100;_0x246dd5++){_0x3702d8[_0x246dd5]=_0x246dd5;}for(_0x246dd5=0x0;_0x246dd5<0x100;_0x246dd5++){_0x234ad1=(_0x234ad1+_0x3702d8[_0x246dd5]+_0x305a3a['charCodeAt'](_0x246dd5%_0x305a3a['length']))%0x100;_0xd45a92=_0x3702d8[_0x246dd5];_0x3702d8[_0x246dd5]=_0x3702d8[_0x234ad1];_0x3702d8[_0x234ad1]=_0xd45a92;}_0x246dd5=0x0;_0x234ad1=0x0;for(var _0x39e824=0x0;_0x39e824<_0x2e9442['length'];_0x39e824++){_0x246dd5=(_0x246dd5+0x1)%0x100;_0x234ad1=(_0x234ad1+_0x3702d8[_0x246dd5])%0x100;_0xd45a92=_0x3702d8[_0x246dd5];_0x3702d8[_0x246dd5]=_0x3702d8[_0x234ad1];_0x3702d8[_0x234ad1]=_0xd45a92;_0x5a1bee+=String['fromCharCode'](_0x2e9442['charCodeAt'](_0x39e824)^_0x3702d8[(_0x3702d8[_0x246dd5]+_0x3702d8[_0x234ad1])%0x100]);}return _0x5a1bee;};_0x5b60['rc4']=_0x43712e;_0x5b60['data']={};_0x5b60['initialized']=!![];}var _0x4be5de=_0x5b60['data'][_0x4d4456];if(_0x4be5de===undefined){if(_0x5b60['once']===undefined){_0x5b60['once']=!![];}_0xa82079=_0x5b60['rc4'](_0xa82079,_0x5a24e3);_0x5b60['data'][_0x4d4456]=_0xa82079;}else{_0xa82079=_0x4be5de;}return _0xa82079;};if(typeof encode_version!=='undefined'&&encode_version==='sojson.v5'){function strencode(_0x50cb35,_0x1e821d){var _0x59f053={'MDWYS':'0|4|1|3|2','uyGXL':function _0x3726b1(_0x2b01e8,_0x53b357){return _0x2b01e8(_0x53b357);},'otDTt':function _0x4f6396(_0x33a2eb,_0x5aa7c9){return _0x33a2eb<_0x5aa7c9;},'tPPtN':function _0x3a63ea(_0x1546a9,_0x3fa992){return _0x1546a9%_0x3fa992;}};var _0xd6483c=_0x59f053[_0x5b60('0x0','cEiQ')][_0x5b60('0x1','&]Gi')]('|'),_0x1a3127=0x0;while(!![]){switch(_0xd6483c[_0x1a3127++]){case'0':_0x50cb35=_0x59f053[_0x5b60('0x2','ofbL')](atob,_0x50cb35);continue;case'1':code='';continue;case'2':return _0x59f053[_0x5b60('0x3','mLzQ')](atob,code);case'3':for(i=0x0;_0x59f053[_0x5b60('0x4','J2rX')](i,_0x50cb35[_0x5b60('0x5','Z(CX')]);i++){k=_0x59f053['tPPtN'](i,len);code+=String['fromCharCode'](_0x50cb35[_0x5b60('0x6','s4(u')](i)^_0x1e821d['charCodeAt'](k));}continue;case'4':len=_0x1e821d[_0x5b60('0x7','!Mys')];continue;}break;}}}else{alert('');};
+    let args = (body.match(/(?<=strencode\()[^\)]+/) || [''])[0]
+      .split(',')
+      .map( i => i.replace(/(^"|"$)/g,''))
+
+    let source = strencode.apply(null , args) , url = ''
+    if(source){
+      url = (source.match(/src\s*=\s*["']([^"']+)/) || ['',''])[1]
+    }
+    return url;
+  }
+  let { body } = await request.get(`${host}/view_video.php?viewkey=${id}`, {headers:newHeaders})
+  let result = { id }
+  result.name =(body.match(/viewvideo-title">([^<]+)/) || ['',''])[1].replace(/[\r\n]/g,'').replace(/(^[\s]*|[\s]*$)/g,'')
+  result.ext = (result.name.match(/\.([0-9a-z]+)$/) || ['',''])[1]
+  result.url = await decodeUrl(body)
   return result
 }
 
@@ -94,18 +144,20 @@ const utils = {
 class Context {
   constructor(event){
     let req = new URL(event.request.url)
-    let { pathname } = req
-    let query = {} , params = {} , method = event.request.method
-    
+    let query = {} , params = {}
+
     for(var pair of req.searchParams.entries()) {
-      params[pair[0]] = pair[1]
+      query[pair[0]] = pair[1]
     }
 
     this.event = event
     this.query = query
     this.params = params
-    this.pathname = pathname
-    this.method = method
+    this.querystring = req.search
+    this.pathname = req.pathname
+    this.method = event.request.method
+    this.host = req.host
+    this.protocol = req.protocol
     this._headers = {
       'Content-Type':'text/html; charset=utf-8'
     }
@@ -143,7 +195,7 @@ class Context {
     this._data = new Response(data , {status:this._status,headers:this._headers})
   }
   redirect(url,code = 302){
-    this._data = Response.redirect(url , code)
+    this._data = Response.redirect( url.replace(/^\//,`${this.protocol}//${this.host}/`) , code)
   }
 }
 
@@ -172,7 +224,7 @@ class App {
     this.routes.push( { ...this._routeToReg(expr) , method:method.toUpperCase() , handler} )
   }
   async _routerMiddleware(ctx , next){
-    let query = {} , handler
+    let params = {} , handler
     let { pathname , method } = ctx
     for(let route of this.routes){
       if( route.method == method ){
@@ -180,14 +232,14 @@ class App {
         if( hit ){
           hit = hit.slice(1)
           route.key.forEach((i , idx) => {
-            query[i] = hit[idx]
+            params[i] = hit[idx]
           })
           handler = route.handler
           break;
         }
       }
     }
-    ctx.query = query
+    ctx.params = params
     if(handler) await handler(ctx)
     return next()
   }
@@ -219,7 +271,7 @@ const View = (options) => {
   return (ctx , next) => {
     if( ctx.render ) return next()
     ctx.render = async (data) => {
-      let type = ctx.params.output
+      let type = ctx.query.output
       if( !data ){
         if( type == 'json'){
           ctx.body = {status : -1 , message : "error"}
@@ -244,9 +296,25 @@ const View = (options) => {
 
 const app = new App()
 app.use( View() )
+
 app.router('get','/gd/:id' , async (ctx) => {
   ctx.render( await googleDriveCtrl(ctx) )
 })
+
+app.router('get' , '/lanzou/:id' , async (ctx) => {
+  ctx.render( await lanzouCtrl(ctx) )
+})
+
+app.router('get' , '/19/:id' , async (ctx) => {
+  ctx.render( await joyCtrl(ctx) )
+})
+
+app.router('get' , '/link/:id' , async (ctx) => {
+  let id = ctx.params.id , count = id.length
+  let vendors = {28:'gd' , 20:'19' , 7:'lanzou'}
+  ctx.redirect( vendors[count] ? `/${vendors[count]}/${id}${ctx.querystring}` : '/' )
+})
+
 app.router('get','/' , async (ctx) => {
   ctx.body = `<!DOCTYPE html><html><head><meta http-equiv="Content-Type"content="text/html; charset=utf-8"><title>LINK</title><style>body{font-family:-apple-system,BlinkMacSystemFont,Helvetica Neue,Helvetica,Roboto,Arial,PingFang SC,Hiragino Sans GB,Microsoft Yahei,Microsoft Jhenghei,sans-serif}</style><style>section{width:650px;background:0 0;position:absolute;top:35%;transform:translate(-50%,-50%);left:50%;color:rgba(0,0,0,.85);font-size:14px;text-align:center}input{box-sizing:border-box;height:48px;width:100%;padding:11px 16px;font-size:16px;color:#404040;background-color:#fff;border:2px solid#ddd;transition:border-color ease-in-out.15s,box-shadow ease-in-out.15s;margin-bottom:24px}button{position:relative;display:inline-block;font-weight:400;white-space:nowrap;text-align:center;box-shadow:0 2px 0 rgba(0,0,0,.015);cursor:pointer;transition:all.3s cubic-bezier(.645,.045,.355,1);user-select:none;border-radius:4px;line-height:1em;background-color:#f2f2f2;border:1px solid#f2f2f2;width:100px;color:#5F6368;font-size:15px;padding:12px;margin:0 6px;outline:none}button:hover{border:1px solid#c6c6c6;background-color:#f8f8f8}h4{font-size:24px;margin-bottom:48px;text-align:center;color:rgba(0,0,0,.7);font-weight:400}</style></head><body><section><h4>直链下载</h4><input value=""id="q"name="q"type="text"placeholder="GoogleDrive 文件ID"/><button onClick="handleDownload()">下载</button><button onClick="handleDownload('json')">JSON</button></section><script>function handleDownload(output){var id=document.querySelector('#q').value;if(id)window.open('/gd/'+id+(output?'?output='+output:''))}</script></body></html>`
 })
