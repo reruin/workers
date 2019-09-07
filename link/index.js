@@ -17,7 +17,7 @@ const googleDriveCtrl = async (ctx) => {
   if(headers['location']){
     downloadUrl = headers['location']
   }
-  //大文件下载提示
+  //大文件下载提示
   else{
     if(body.indexOf('Too many users') == -1){
       let url = (body.match(/uc\?export=download[^"']+/i) || [''])[0]
@@ -142,8 +142,8 @@ class Context {
     }
     this._data = new Response(data , {status:this._status,headers:this._headers})
   }
-  redirect(url){
-    this._data = Response.redirect(location, 301)
+  redirect(url,code = 302){
+    this._data = Response.redirect(url , code)
   }
 }
 
