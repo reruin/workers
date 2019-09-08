@@ -1,23 +1,20 @@
 const googleDriveCtrl = async (ctx) => {
   const id = ctx.params.id
   const host = 'https://drive.google.com/'
-  const newHeaders = {
-    'user-agent':ctx.req.headers.get('user-agent')
-  }
   let result = { id }
   if( ctx.query.output == 'json' ){
     let resp = await request.get(`${host}file/d/${id}/view`)
     result.name = (resp.body.match(/<meta\s+property="og:title"\s+content="([^"]+)"/) || ['',''])[1]
     result.ext = (result.name.match(/\.([0-9a-z]+)$/) || ['',''])[1]
-    if(resp.body.indexOf('errorMessage') >=0 ) return
+    if(resp.body.indexOf('errorMessage') >=0 ) return result
   }
   
-  let downloadUrl
-  let { body , headers , redirected , url }= await request.get(`${host}uc?id=${id}&export=download`,{headers: newHeaders , redirect:'manual'})
+  let downloadUrl = ''
+  let { body , headers , redirected , url }= await request.get(`${host}uc?id=${id}&export=download`,{headers: ctx.req.headers , redirect:'manual'})
   if(headers['location']){
     downloadUrl = headers['location']
   }
-  //大文件下载提示
+  //大文件下载提示
   else{
     if(body.indexOf('Too many users') == -1){
       let url = (body.match(/uc\?export=download[^"']+/i) || [''])[0]
@@ -26,6 +23,8 @@ const googleDriveCtrl = async (ctx) => {
       if(resp.headers['location'] ){
         downloadUrl = resp.headers['location']
       }
+    }else{
+      result.message = 'Too many users have viewed or downloaded this file recently';
     }
   }
   result.url = downloadUrl.replace('?e=download','')
@@ -36,15 +35,15 @@ const lanzouCtrl = async (ctx) => {
   const id = ctx.params.id
   const host = 'https://www.lanzous.com'
   const newHeaders = {
-    'user-agent':'Mozilla/5.0 (Linux; Android 6.0; 1503-M02 Build/MRA58K) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/37.0.0.0 Mobile MQQBrowser/6.2 TBS/036558 Safari/537.36 MicroMessenger/6.3.25.861 NetType/WIFI Language/zh_CN'
+    'user-agent':'Mozilla/5.0 (Linux; Android 6.0) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/37.0.0.0 Mobile Safari/537.36 MicroMessenger/6.3.25.861'
   }
   let result = { id }
-  let { body }  = await request.get(`${host}/tp/${id}` , {headers:{...newHeaders}})
+  let { body }  = await request.get(`${host}/tp/${id}` , {headers:{...newHeaders , referrer:''}})
   let url = (body.match(/(?<=dpost\s*\+\s*["']\?)[^"']+/) || [false])[0]
   let base = (body.match(/(?<=urlp[^\=]*=\s*')[^']+/)|| [false])[0]
   result.name = (body.match(/(?<="md">)[^<]+/) || [''])[0].replace(/\s*$/,'')
   result.ext = (result.name.match(/\.([0-9a-z]+)$/) || ['',''])[1]
-  if(url && base) result.url = base + url
+  if(url && base) result.url = base + '?' + url
   return result
 }
 
@@ -54,7 +53,7 @@ const joyCtrl = async (ctx) => {
   const rnd = (min , max) => Math.floor(min+Math.random()*(max-min))
   const ip = rnd(50,250) + "." + rnd(50,250) + "." + rnd(50,250)+ "." + rnd(50,250)
   const newHeaders = {
-    'PHPSESSID':'cf',
+    'PHPSESSID':'fff',
     'CLIENT-IP':ip,
     'HTTP_X_FORWARDED_FOR':ip,
     'user-agent':ctx.req.headers.get('user-agent')
@@ -77,7 +76,7 @@ const joyCtrl = async (ctx) => {
   let { body } = await request.get(`${host}/view_video.php?viewkey=${id}`, {headers:newHeaders})
   let result = { id }
   result.name =(body.match(/viewvideo-title">([^<]+)/) || ['',''])[1].replace(/[\r\n]/g,'').replace(/(^[\s]*|[\s]*$)/g,'')
-  result.ext = (result.name.match(/\.([0-9a-z]+)$/) || ['',''])[1]
+  result.ext = 'mp4'
   result.url = await decodeUrl(body)
   return result
 }
@@ -285,8 +284,27 @@ const View = (options) => {
         else if(type == 'redirect'){
           ctx.redirect( data.url )
         }
+        else if(type == 'preview'){
+          if( ['mp3','ogg','m4a','acc'].includes(data.ext)){
+            ctx.body = `<audio src=${data.url} controls autoplay></autio>`
+          }else if( ['mp4', 'mkv' , 'webm'].includes(data.ext) ){
+            ctx.body = `<video src=${data.url} controls autoplay></video>`
+          }else if( ['jpg','jpeg','png','gif','bmp'].includes(data.ext)){
+            ctx.body = `<img src="${data.url}">`
+          }else{
+            ctx.body = '无法预览'
+          }
+        }
         else{
-          ctx.body = fetch(data.url)
+          // ref https://community.cloudflare.com/t/a-valid-host-header-must-be-supplied-to-reach-the-desired-website/48569/3
+          // Workers’ implementation of fetch() does not currently support fetching directly from an IP address at all. 
+          ctx.body = fetch(data.url , {headers:ctx.req.headers})
+          return          
+          if( /\:\/\/[\.\d]+/.test(data.url)){
+            ctx.redirect( data.url )
+          }else{
+            ctx.body = fetch(data.url , {headers:ctx.req.headers})
+          }
         }
       }
     }
@@ -316,6 +334,6 @@ app.router('get' , '/link/:id' , async (ctx) => {
 })
 
 app.router('get','/' , async (ctx) => {
-  ctx.body = `<!DOCTYPE html><html><head><meta http-equiv="Content-Type"content="text/html; charset=utf-8"><title>LINK</title><style>body{font-family:-apple-system,BlinkMacSystemFont,Helvetica Neue,Helvetica,Roboto,Arial,PingFang SC,Hiragino Sans GB,Microsoft Yahei,Microsoft Jhenghei,sans-serif}</style><style>section{width:650px;background:0 0;position:absolute;top:35%;transform:translate(-50%,-50%);left:50%;color:rgba(0,0,0,.85);font-size:14px;text-align:center}input{box-sizing:border-box;height:48px;width:100%;padding:11px 16px;font-size:16px;color:#404040;background-color:#fff;border:2px solid#ddd;transition:border-color ease-in-out.15s,box-shadow ease-in-out.15s;margin-bottom:24px}button{position:relative;display:inline-block;font-weight:400;white-space:nowrap;text-align:center;box-shadow:0 2px 0 rgba(0,0,0,.015);cursor:pointer;transition:all.3s cubic-bezier(.645,.045,.355,1);user-select:none;border-radius:4px;line-height:1em;background-color:#f2f2f2;border:1px solid#f2f2f2;width:100px;color:#5F6368;font-size:15px;padding:12px;margin:0 6px;outline:none}button:hover{border:1px solid#c6c6c6;background-color:#f8f8f8}h4{font-size:24px;margin-bottom:48px;text-align:center;color:rgba(0,0,0,.7);font-weight:400}</style></head><body><section><h4>直链下载</h4><input value=""id="q"name="q"type="text"placeholder="文件ID(GoogleDrive / Lanzou / 19)"/><button onClick="handleDownload()">下载</button><button onClick="handleDownload('json')">JSON</button></section><script>function handleDownload(output){var id=document.querySelector('#q').value;if(id)window.open('/link/'+id+(output?'?output='+output:''))}</script></body></html>`
+  ctx.body = `<!DOCTYPE html><html><head><meta http-equiv="Content-Type"content="text/html; charset=utf-8"><title>LINK</title><style>body{font-family:-apple-system,BlinkMacSystemFont,Helvetica Neue,Helvetica,Roboto,Arial,PingFang SC,Hiragino Sans GB,Microsoft Yahei,Microsoft Jhenghei,sans-serif}</style><style>section{width:650px;background:0 0;position:absolute;top:35%;transform:translate(-50%,-50%);left:50%;color:rgba(0,0,0,.85);font-size:14px;text-align:center}input{box-sizing:border-box;height:48px;width:100%;padding:11px 16px;font-size:16px;color:#404040;background-color:#fff;border:2px solid#ddd;transition:border-color ease-in-out.15s,box-shadow ease-in-out.15s;margin-bottom:24px}button{position:relative;display:inline-block;font-weight:400;white-space:nowrap;text-align:center;box-shadow:0 2px 0 rgba(0,0,0,.015);cursor:pointer;transition:all.3s cubic-bezier(.645,.045,.355,1);user-select:none;border-radius:4px;line-height:1em;background-color:#f2f2f2;border:1px solid#f2f2f2;width:100px;color:#5F6368;font-size:15px;padding:12px;margin:0 6px;outline:none}button:hover{border:1px solid#c6c6c6;background-color:#f8f8f8}h4{font-size:24px;margin-bottom:48px;text-align:center;color:rgba(0,0,0,.7);font-weight:400}</style></head><body><section><h4>直链下载</h4><input value=""id="q"name="q"type="text"placeholder="文件ID (GoogleDrive / Lanzou / 19)"/><button onClick="handleDownload()">下载</button><button onClick="handleDownload('preview')">预览</button><button onClick="handleDownload('json')">JSON</button></section><script>function handleDownload(output){var id=document.querySelector('#q').value;if(id)window.open('/link/'+id+(output?'?output='+output:''))}</script></body></html>`
 })
 app.listen()
