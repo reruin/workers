@@ -1,25 +1,61 @@
-const googleDriveCtrl = async (ctx) => {
+const googleDriveCtrl = async (ctx , view) => {
   const id = ctx.params.id
   const host = 'https://drive.google.com/'
   let result = { id }
-  if( ctx.query.output == 'json' ){
-    let resp = await request.get(`${host}file/d/${id}/view`)
-    result.name = (resp.body.match(/<meta\s+property="og:title"\s+content="([^"]+)"/) || ['',''])[1]
-    result.ext = (result.name.match(/\.([0-9a-z]+)$/) || ['',''])[1]
-    if(resp.body.indexOf('errorMessage') >=0 ) return result
-  }
+  //if( ctx.query.output == 'json' ){
+  let resp = await request.get(`${host}file/d/${id}/view`)
+  result.name = (resp.body.match(/<meta\s+property="og:title"\s+content="([^"]+)"/) || ['',''])[1]
+  result.ext = (result.name.match(/\.([0-9a-z]+)$/) || ['',''])[1]
+  if(resp.body.indexOf('errorMessage') >=0 ) return result
+  //}
   
   let downloadUrl = ''
+  let code = (resp.body.match(/viewerData\s*=\s*(\{[\w\W]+?\});<\/script>/) || ['',''])[1]
+  let preview_url = ''
+  code = code.replace(/[\r\n]/g,'').replace(/'/g,'"')
+    .replace('config','"config"')
+    .replace('configJson','"configJson"')
+    .replace('itemJson','"itemJson"')
+    .replace(/,\}/g,'}')
+    .replace(/\\x22/g,'"')
+    .replace(/\\x27/g,"'")
+    .replace(/\\x5b/g,'[')
+    .replace(/\\x5d/g,']')
+    .replace(/\\(r|n)/g,'')
+    .replace(/\\\\u/g,'\\u').toString(16)
+
+  if(code){
+    try{
+      code = JSON.parse(code)
+      //获取码率
+      // 37/1920x1080/9/0/115, 
+      // "size|url,size|url"
+      const rates = {} , urls = []
+      code.itemJson[19][0][15][1].split(',').forEach(i => {
+        let [c,_,r] = i.split(/[\/x]/)
+        rates[c] = parseInt(r)
+      })
+      code.itemJson[19][0][18][1].split(',').forEach( i => {
+        let [rate , url] = i.split('|')
+        urls.push({size:rates[rate] , url:decodeURIComponent(url)})
+      })
+      result.urls = urls.sort((a,b)=>a.size<b.size?1:-1)
+    }catch(e){
+      console.log(e)
+    }
+  }
+  if(ctx.query.output == 'media')
+    result.cookie = resp.headers['set-cookie']
   let { body , headers , redirected , url }= await request.get(`${host}uc?id=${id}&export=download`,{headers: ctx.req.headers , redirect:'manual'})
   if(headers['location']){
     downloadUrl = headers['location']
   }
-  //大文件下载提示
+  //大文件下载提示
   else{
     if(body.indexOf('Too many users') == -1){
       let url = (body.match(/uc\?export=download[^"']+/i) || [''])[0]
       let cookie = headers['set-cookie']
-      let resp = await request.get(host + url.replace(/&amp;/g,'&') , {headers:{...newHeaders, cookie} , redirect:'manual'})
+      let resp = await request.get(host + url.replace(/&amp;/g,'&') , {headers:{cookie} , redirect:'manual'})
       if(resp.headers['location'] ){
         downloadUrl = resp.headers['location']
       }
@@ -295,11 +331,24 @@ const View = (options) => {
             ctx.body = '无法预览'
           }
         }
+        else if(type == 'media'){
+          if(data.urls){
+            let rawHeaders = ctx.req.headers
+            let headers = new Headers()
+            headers.append('cookie' , data.cookie)
+            ;['range'].forEach(i => {
+              if( rawHeaders.has(i)){
+                headers.append(i , rawHeaders.get(i))
+              }
+            })
+            ctx.body = fetch(data.urls[0].url , {headers})
+          }else{
+            ctx.body = '404'
+          }
+        }
         else{
           // ref https://community.cloudflare.com/t/a-valid-host-header-must-be-supplied-to-reach-the-desired-website/48569/3
           // Workers’ implementation of fetch() does not currently support fetching directly from an IP address at all. 
-          ctx.body = fetch(data.url , {headers:ctx.req.headers})
-          return          
           if( /\:\/\/[\.\d]+/.test(data.url)){
             ctx.redirect( data.url )
           }else{
@@ -319,6 +368,10 @@ app.router('get','/gd/:id' , async (ctx) => {
   ctx.render( await googleDriveCtrl(ctx) )
 })
 
+app.router('get','/gda/:id' , async (ctx) => {
+  ctx.render( await googleDriveCtrl(ctx) )
+})
+
 app.router('get' , '/lanzou/:id' , async (ctx) => {
   ctx.render( await lanzouCtrl(ctx) )
 })
@@ -334,6 +387,6 @@ app.router('get' , '/link/:id' , async (ctx) => {
 })
 
 app.router('get','/' , async (ctx) => {
-  ctx.body = `<!DOCTYPE html><html><head><meta http-equiv="Content-Type"content="text/html; charset=utf-8"><title>LINK</title><style>body{font-family:-apple-system,BlinkMacSystemFont,Helvetica Neue,Helvetica,Roboto,Arial,PingFang SC,Hiragino Sans GB,Microsoft Yahei,Microsoft Jhenghei,sans-serif}</style><style>section{width:650px;background:0 0;position:absolute;top:35%;transform:translate(-50%,-50%);left:50%;color:rgba(0,0,0,.85);font-size:14px;text-align:center}input{box-sizing:border-box;height:48px;width:100%;padding:11px 16px;font-size:16px;color:#404040;background-color:#fff;border:2px solid#ddd;transition:border-color ease-in-out.15s,box-shadow ease-in-out.15s;margin-bottom:24px}button{position:relative;display:inline-block;font-weight:400;white-space:nowrap;text-align:center;box-shadow:0 2px 0 rgba(0,0,0,.015);cursor:pointer;transition:all.3s cubic-bezier(.645,.045,.355,1);user-select:none;border-radius:4px;line-height:1em;background-color:#f2f2f2;border:1px solid#f2f2f2;width:100px;color:#5F6368;font-size:15px;padding:12px;margin:0 6px;outline:none}button:hover{border:1px solid#c6c6c6;background-color:#f8f8f8}h4{font-size:24px;margin-bottom:48px;text-align:center;color:rgba(0,0,0,.7);font-weight:400}</style></head><body><section><h4>直链下载</h4><input value=""id="q"name="q"type="text"placeholder="文件ID (GoogleDrive / Lanzou / 19)"/><button onClick="handleDownload()">下载</button><button onClick="handleDownload('preview')">预览</button><button onClick="handleDownload('json')">JSON</button></section><script>function handleDownload(output){var id=document.querySelector('#q').value;if(id)window.open('/link/'+id+(output?'?output='+output:''))}</script></body></html>`
+  ctx.body = `<!DOCTYPE html><html><head><meta http-equiv="Content-Type"content="text/html; charset=utf-8"><title>LINK</title><style>body{font-family:-apple-system,BlinkMacSystemFont,Helvetica Neue,Helvetica,Roboto,Arial,PingFang SC,Hiragino Sans GB,Microsoft Yahei,Microsoft Jhenghei,sans-serif}</style><style>section{width:650px;background:0 0;position:absolute;top:35%;transform:translate(-50%,-50%);left:50%;color:rgba(0,0,0,.85);font-size:14px;text-align:center}input{box-sizing:border-box;height:48px;width:100%;padding:11px 16px;font-size:16px;color:#404040;background-color:#fff;border:2px solid#ddd;transition:border-color ease-in-out.15s,box-shadow ease-in-out.15s;margin-bottom:24px}button{position:relative;display:inline-block;font-weight:400;white-space:nowrap;text-align:center;box-shadow:0 2px 0 rgba(0,0,0,.015);cursor:pointer;transition:all.3s cubic-bezier(.645,.045,.355,1);user-select:none;border-radius:4px;line-height:1em;background-color:#f2f2f2;border:1px solid#f2f2f2;min-width:100px;color:#5F6368;font-size:15px;padding:12px;margin:0 6px;outline:none}button:hover{border:1px solid#c6c6c6;background-color:#f8f8f8}h4{font-size:24px;margin-bottom:48px;text-align:center;color:rgba(0,0,0,.7);font-weight:400}</style></head><body><section><h4>直链下载</h4><input value=""id="q"name="q"type="text"placeholder="文件ID (GoogleDrive / Lanzou / 19)"/><button onClick="handleDownload()">下载</button><button onClick="handleDownload('preview')">预览</button><button onClick="handleDownload('json')">JSON</button><button onClick="handleDownload('media')">转码播放(仅限Google)</button></section><script>function handleDownload(output){var id=document.querySelector('#q').value;if(id)window.open('/link/'+id+(output?'?output='+output:''))}</script></body></html>`
 })
 app.listen()
