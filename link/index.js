@@ -40,6 +40,7 @@ const googleDriveCtrl = async (ctx , view) => {
         urls.push({size:rates[rate] , url:decodeURIComponent(url)})
       })
       result.urls = urls.sort((a,b)=>a.size<b.size?1:-1)
+      result.size = parseInt(code.itemJson[25][2])
     }catch(e){
       console.log(e)
     }
@@ -50,7 +51,7 @@ const googleDriveCtrl = async (ctx , view) => {
   if(headers['location']){
     downloadUrl = headers['location']
   }
-  //大文件下载提示
+  //大文件下载提示
   else{
     if(body.indexOf('Too many users') == -1){
       let url = (body.match(/uc\?export=download[^"']+/i) || [''])[0]
@@ -134,7 +135,7 @@ const request = {
       mergeOptions.body = JSON.stringify(mergeOptions.body);
     }
     if( mergeOptions.json ){
-      mergeOptions.headers['Accept'] = 'application/json'
+      mergeOptions.headers['accept'] = 'application/json'
     }
 
     let response = await fetch(url , mergeOptions)
@@ -170,6 +171,21 @@ const utils = {
   },
   isType(v, type){
     return Object.prototype.toString.call( v ) === `[object ${type}]`
+  },
+  getRange(r , total){
+    if(!r) return [0 , total-1]
+    let [, start, end] = r.match(/(\d*)-(\d*)/) || [];
+    start = start ? parseInt(start) : 0
+    end = end ? parseInt(end) : total - 1
+    return [start , end]
+  },
+  parserHeaders(headers){
+    let ret = {}
+    for(let pair of headers.entries()){
+      ret[pair[0].toLowerCase()] = pair[1]
+    }
+    console.log(ret)
+    return ret
   }
 }
 
@@ -179,10 +195,14 @@ const utils = {
 class Context {
   constructor(event){
     let req = new URL(event.request.url)
-    let query = {} , params = {}
+    let query = {} , params = {} , headers = {}
 
-    for(var pair of req.searchParams.entries()) {
+    for(let pair of req.searchParams.entries()) {
       query[pair[0]] = pair[1]
+    }
+
+    for(let pair of event.request.headers.entries()){
+      headers[pair[0].toLowerCase()] = pair[1]
     }
 
     this.event = event
@@ -193,17 +213,13 @@ class Context {
     this.method = event.request.method
     this.host = req.host
     this.protocol = req.protocol
-    this._headers = {
-      'Content-Type':'text/html; charset=utf-8'
-    }
+    this.headers = this.header = headers
+    this._resHeaders = { }
     this._status = 200
     this._data = null
   }
   set(key , value){
-    this._headers[key] = value
-  }
-  get headers(){
-    return this.event.headers
+    this._resHeaders[key] = value
   }
   get res(){
     return this.event.respondWith
@@ -218,16 +234,24 @@ class Context {
     return this._data
   }
   set body(data){
-    // parameter 1 of respondWith is type 'Promise'
     if( utils.isType(data , 'Promise')){
-      this._data = data
+      //get readableStream object and merge haders
+      this._data = data.then(r => new Response(r.body , {
+        status:this._status,
+        headers:{...utils.parserHeaders(r.headers),...this._resHeaders}
+      })).catch(e => {
+        console.log(e);
+      });
+      //this._data = new Response(data , {status:this._status,headers:this._headers})
       return
     }
     if(utils.isPlainObject(data)){
       data = JSON.stringify(data)
       this.set('Content-Type',"application/json")
+    }else{
+      this.set('Content-Type',"text/html; charset=utf-8")
     }
-    this._data = new Response(data , {status:this._status,headers:this._headers})
+    this._data = new Response(data , {status:this._status,headers:this._resHeaders})
   }
   redirect(url,code = 302){
     this._data = Response.redirect( url.replace(/^\//,`${this.protocol}//${this.host}/`) , code)
@@ -253,6 +277,7 @@ class App {
   }
   async process(ctx){
     await this.compose([].concat(this.middlewares , this._routerMiddleware.bind(this)))(ctx);
+    console.log( '>>>',typeof ctx.data)
     return ctx.data
   }
   router(method , expr , handler){
@@ -307,11 +332,12 @@ const View = (options) => {
     if( ctx.render ) return next()
     ctx.render = async (data) => {
       let type = ctx.query.output
-      if( !data ){
+      if( !data.url ){
+        console.log(data)
         if( type == 'json'){
-          ctx.body = {status : -1 , message : "error"}
+          ctx.body = {status : -1 , message : "error" , ...data}
         }else{
-          ctx.body = "404"
+          ctx.body = data.message || '404'
         }
       }else{
         if(type == 'json'){
@@ -352,7 +378,33 @@ const View = (options) => {
           if( /\:\/\/[\.\d]+/.test(data.url)){
             ctx.redirect( data.url )
           }else{
-            ctx.body = fetch(data.url , {headers:ctx.req.headers})
+            // if(data.size){
+            //   ctx.set('accept-ranges','bytes')
+            //   let headers = ctx.headers
+            //   if(ctx.headers['range']){
+            //     let [start , end] = utils.getRange(ctx.headers['range'] , data.size)
+            //     ctx.set('content-range', `bytes ${start}-${end}/${data.size}`)
+            //     ctx.set('content-length', end - start + 1)
+            //     headers.range = `bytes=${start}-${end}`
+            //     ctx.status = 206
+            //   }else{
+            //     ctx.set('content-range', `bytes 0-${data.size-1}/${data.size}`)
+            //     headers.range = `bytes=0-`
+            //   }
+            // }
+            // console.log(ctx.headers)
+            let headers = ctx.headers
+            if(data.size){
+              ctx.status = 206
+              ctx.set('accept-range','bytes')
+               if(!headers['range']){
+              // headers.Range = 'bytes=0-2180577102'
+              ctx.set('content-length',data.size)
+              }
+            }
+
+            ctx.set('accept-range','bytes')
+            ctx.body = fetch(data.url , {headers})
           }
         }
       }
